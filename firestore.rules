@@ -1,0 +1,57 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isActiveUser() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/pengguna/$(request.auth.uid))
+        && get(/databases/$(database)/documents/pengguna/$(request.auth.uid)).data.aktif == true;
+    }
+
+    function isAdmin() {
+      return isActiveUser()
+        && get(/databases/$(database)/documents/pengguna/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function isKasir() {
+      return isActiveUser()
+        && get(/databases/$(database)/documents/pengguna/$(request.auth.uid)).data.role == "kasir";
+    }
+
+    function isAdminOrKasir() {
+      return isAdmin() || isKasir();
+    }
+
+    match /pengguna/{uid} {
+      allow read: if isActiveUser() && (isAdmin() || uid == request.auth.uid);
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /produk/{id} {
+      allow read: if isAdminOrKasir();
+
+      allow create, delete: if isAdmin();
+
+      allow update: if isAdmin();
+    }
+
+    match /penjualan/{id} {
+      allow read: if isAdminOrKasir();
+
+      allow create, update, delete: if false;
+    }
+
+    match /riwayat_stok/{id} {
+      allow read, write: if isAdmin();
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
